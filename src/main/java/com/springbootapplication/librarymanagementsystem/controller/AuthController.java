@@ -1,64 +1,45 @@
 package com.springbootapplication.librarymanagementsystem.controller;
 
+import com.springbootapplication.librarymanagementsystem.dto.RegisterRequestDTO;
+import com.springbootapplication.librarymanagementsystem.dto.UserResponseDTO;
+import com.springbootapplication.librarymanagementsystem.entity.user.User;
+import com.springbootapplication.librarymanagementsystem.interfaces.AuthService;
 import com.springbootapplication.librarymanagementsystem.models.JwtRequest;
 import com.springbootapplication.librarymanagementsystem.models.JwtResponse;
-import com.springbootapplication.librarymanagementsystem.security.JWTHelper;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
+import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.BadCredentialsException;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping(value = "/auth")
+@Validated
 public class AuthController {
-    @Autowired
-    private UserDetailsService userDetailsService;
+    private final AuthService service;
 
-    @Autowired
-    private AuthenticationManager manager;
-
-
-    @Autowired
-    private JWTHelper helper;
-
-    private Logger logger = LoggerFactory.getLogger(AuthController.class);
-
-
-    @PostMapping("/login")
-    public ResponseEntity<JwtResponse> login(@RequestBody JwtRequest request) {
-
-        this.doAuthenticate(request.getUsername(), request.getPassword());
-
-
-        UserDetails userDetails = userDetailsService.loadUserByUsername(request.getUsername());
-        String token = this.helper.generateToken(userDetails);
-
-        JwtResponse response = JwtResponse.builder()
-                .jwtToken(token)
-                .username(userDetails.getUsername()).build();
-        return new ResponseEntity<>(response, HttpStatus.OK);
+    public AuthController(AuthService service) {
+        this.service = service;
     }
 
-    private void doAuthenticate(String username, String password) {
-
-        UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(username, password);
-        try {
-            manager.authenticate(authentication);
-        } catch (BadCredentialsException e) {
-            throw new BadCredentialsException(" Invalid Username or Password  !!");
+    @PostMapping(value = "/login")
+    public ResponseEntity<JwtResponse> login(@RequestBody @Valid JwtRequest request) {
+        return ResponseEntity.ok(service.login(request));
+    }
+    @PostMapping(value = "/register")
+    public ResponseEntity<String> register(@RequestBody @Valid RegisterRequestDTO dto){
+        return new ResponseEntity<>(this.service.register(dto), HttpStatus.CREATED);
+    }
+    @GetMapping(value = "/getUsers")
+    @PreAuthorize("hasRole('LIBRARIAN')")
+    public ResponseEntity<List<UserResponseDTO>> getAllUsers(){
+        List<UserResponseDTO> userList = this.service.getAllUserDetails();
+        if (userList.isEmpty()){
+            return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
         }
-
-    }
-
-    @ExceptionHandler(BadCredentialsException.class)
-    public String exceptionHandler() {
-        return "Credentials Invalid !!";
+        return ResponseEntity.ok(userList);
     }
 }
